@@ -14,6 +14,8 @@ TxStruct sensorData;
 
 OneWire oneWire(oneWirePin);
 DallasTemperature sensorDallas(&oneWire);
+DFRobot_SHT20 sht20(&Wire, SHT20_I2C_ADDR);
+BH1750 lightMeter;
 
 void initSensors()
 {
@@ -27,6 +29,10 @@ void initSensors()
     pinMode(redPin, OUTPUT);
     pinMode(bluePin, OUTPUT);
 
+    Wire.begin();
+    sht20.initSHT20();
+    lightMeter.begin();
+
     Serial.print("Init sensors completed");
 }
 
@@ -39,26 +45,38 @@ int dallasSample()
 
 void collectSample()
 {
+    float sum_b_temp = 0;
+    float sum_lux = 0;
+    float sum_a_temp = 0;
+    float sum_a_hum = 0;
     int sum_volt_battery = 0;
-    int sum_adc_ph = 0;
-    float sum_temp = 0;
 
     for (int i = 0; i < sampling; i++)
     {
-        sum_volt_battery = sum_volt_battery + analogReadMilliVolts(batteryPin);
-        sum_adc_ph = sum_adc_ph + analogRead(phPin);
-        sum_temp += dallasSample();
+        sum_b_temp += dallasSample();
+        sum_lux += lightMeter.readLightLevel();
+        sum_a_temp += sht20.readTemperature();
+        sum_a_hum += sht20.readHumidity();
+        sum_volt_battery += analogReadMilliVolts(batteryPin);
+        
         delay(10);
     }
     
+    sensorData.b_temp = sum_b_temp / sampling;
+    sensorData.lux = sum_lux / sampling;
+    sensorData.a_temp = sum_a_temp / sampling;
+    sensorData.a_hum = sum_a_hum / sampling;
     sensorData.volt_battery = (2 * sum_volt_battery / sampling) / 1000;
-    sensorData.adc_ph = sum_adc_ph / sampling;
-    sensorData.temp = sum_temp / sampling;
     
     Serial.print("Bean temp = ");
-    Serial.println(sensorData.temp);
+    Serial.println(sensorData.b_temp);
+    Serial.print("Lux = ");
+    Serial.println(sensorData.lux);
+    Serial.print("Ambient temp = ");
+    Serial.println(sensorData.a_temp);
+    Serial.print("Ambient hum = ");
+    Serial.println(sensorData.a_hum);
+    
     Serial.print("Volt battery = ");
     Serial.println(sensorData.volt_battery);
-    Serial.print("ADC pH = ");
-    Serial.println(sensorData.adc_ph);
 }

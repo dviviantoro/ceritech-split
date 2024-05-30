@@ -5,8 +5,11 @@
 typedef struct RxStruct
 {
     char id_device[32];
-    float temp;
-    int adc_ph;
+    float b_temp;
+    float lux;
+    float a_temp;
+    float a_hum;
+
     float volt_battery;
     bool charge_battery;
 } RxStruct;
@@ -16,8 +19,10 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
     memcpy(&sensorData, incomingData, sizeof(sensorData));
     String messages = "cerifer;";
     messages += String(sensorData.id_device) + ";";
-    messages += String(sensorData.temp) + ";";
-    messages += String(sensorData.adc_ph) + ";";
+    messages += String(sensorData.b_temp) + ";";
+    messages += String(sensorData.lux) + ";";
+    messages += String(sensorData.a_temp) + ";";
+    messages += String(sensorData.a_hum) + ";";
     messages += String(sensorData.volt_battery) + ";";
     messages += String(sensorData.charge_battery) + ";";
     Serial.println(messages);
