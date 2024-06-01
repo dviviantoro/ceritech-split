@@ -3,7 +3,7 @@
 #include <esp_now.h>
 #include <my_collect_data.h>
 
-#define ID_DEVICE "FER-001001"
+#define ID_DEVICE "GAR-001001"
 #define uS_TO_S_FACTOR 1000000
 #define TIME_TO_SLEEP  15
 

@@ -14,8 +14,7 @@ RxStruct sensorData;
 
 void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
     memcpy(&sensorData, incomingData, sizeof(sensorData));
-    String messages = "cerifer;";
-    messages += String(sensorData.id_device) + ";";
+    String messages = String(sensorData.id_device) + ";";
     messages += String(sensorData.temp) + ";";
     messages += String(sensorData.adc_ph) + ";";
     messages += String(sensorData.volt_battery) + ";";
