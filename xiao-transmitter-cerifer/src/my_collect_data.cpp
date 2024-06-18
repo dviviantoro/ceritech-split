@@ -54,6 +54,8 @@ void collectSample()
     sensorData.volt_battery = (2 * sum_volt_battery / sampling) / 1000;
     sensorData.adc_ph = sum_adc_ph / sampling;
     sensorData.temp = sum_temp / sampling;
+
+    digitalWrite(switchPin, LOW);
     
     Serial.print("Bean temp = ");
     Serial.println(sensorData.temp);
@@ -61,4 +63,6 @@ void collectSample()
     Serial.println(sensorData.volt_battery);
     Serial.print("ADC pH = ");
     Serial.println(sensorData.adc_ph);
+
+    delay(50);
 }

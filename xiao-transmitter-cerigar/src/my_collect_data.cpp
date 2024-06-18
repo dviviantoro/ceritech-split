@@ -54,19 +54,24 @@ void collectSample()
     for (int i = 0; i < sampling; i++)
     {
         sum_b_temp += dallasSample();
-        sum_lux += lightMeter.readLightLevel();
-        sum_a_temp += sht20.readTemperature();
-        sum_a_hum += sht20.readHumidity();
+        // sum_lux += lightMeter.readLightLevel();
+        // sum_a_temp += sht20.readTemperature();
+        // sum_a_hum += sht20.readHumidity();
         sum_volt_battery += analogReadMilliVolts(batteryPin);
         
         delay(10);
     }
     
     sensorData.b_temp = sum_b_temp / sampling;
-    sensorData.lux = sum_lux / sampling;
-    sensorData.a_temp = sum_a_temp / sampling;
-    sensorData.a_hum = sum_a_hum / sampling;
+    // sensorData.lux = sum_lux / sampling;
+    // sensorData.a_temp = sum_a_temp / sampling;
+    // sensorData.a_hum = sum_a_hum / sampling;
+    sensorData.lux = lightMeter.readLightLevel();
+    sensorData.a_temp = sht20.readTemperature();
+    sensorData.a_hum = sht20.readHumidity();
     sensorData.volt_battery = (2 * sum_volt_battery / sampling) / 1000;
+
+    digitalWrite(switchPin, LOW);
     
     Serial.print("Bean temp = ");
     Serial.println(sensorData.b_temp);

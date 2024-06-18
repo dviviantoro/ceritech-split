@@ -26,6 +26,11 @@ void setup() {
     Serial.begin(9600);
     WiFi.mode(WIFI_STA);
 
+    delay(5000);
+
+    Serial.print("ESP Board MAC Address:  ");
+    Serial.println(WiFi.macAddress());
+
     if (esp_now_init() != 0)
     {
         Serial.println("Error initializing ESP-NOW");

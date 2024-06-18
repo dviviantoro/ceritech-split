@@ -5,15 +5,16 @@
 
 #define ID_DEVICE "FER-001001"
 #define uS_TO_S_FACTOR 1000000
-#define TIME_TO_SLEEP  15
-
-uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+#define TIME_TO_SLEEP  10
+// 84:CC:A8:98:17:F6
+uint8_t broadcastAddress[] = {0x84, 0xCC, 0xA8, 0x98, 0x17, 0xF6};
 esp_now_peer_info_t peerInfo;
 RTC_DATA_ATTR int fail_sendDataCount = 0;
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
     Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+    status == ESP_NOW_SEND_SUCCESS ? fail_sendDataCount = 0 : fail_sendDataCount++;
 }
 
 void print_wakeup_reason(){
@@ -64,39 +65,41 @@ void initEspNow()
 
 void setup() {
     Serial.begin(9600);
-    WiFi.mode(WIFI_STA);
-
     print_wakeup_reason();
+    WiFi.mode(WIFI_STA);
     
+    initEspNow();
     initSensors();
+
+    // delay(1000);
+    // if (result == ESP_OK)
+    // {
+    //     Serial.println("Send with success");
+    //     digitalWrite(bluePin, HIGH);
+    // }
+    // else 
+    // {
+    //     Serial.println("Error sending the data");
+    //     fail_sendDataCount++;
+    //     digitalWrite(redPin, HIGH);
+    // }
+
     collectSample();
     strcpy(sensorData.id_device, ID_DEVICE);
 
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sensorData, sizeof(sensorData));
 
-    if (result == ESP_OK)
-    {
-        Serial.println("Send with success");
-        digitalWrite(bluePin, HIGH);
-    }
-    else 
-    {
-        Serial.println("Error sending the data");
-        fail_sendDataCount++;
-        digitalWrite(redPin, HIGH);
-    }
-
     if (fail_sendDataCount >= 4)
     {
         fail_sendDataCount = 0;
-        esp_deep_sleep_enable_gpio_wakeup(BIT(D8), ESP_GPIO_WAKEUP_GPIO_HIGH);
+        esp_deep_sleep_enable_gpio_wakeup(BIT(D3), ESP_GPIO_WAKEUP_GPIO_HIGH);
     }
     else 
     {
         esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
     }
 
-    // delay(500);
+    Serial.println(fail_sendDataCount);
     Serial.println("Going to sleep now");
     digitalWrite(redPin, LOW);
     digitalWrite(bluePin, LOW);
@@ -104,4 +107,5 @@ void setup() {
     esp_deep_sleep_start();
 }
     
-void loop() {}
+void loop() {
+}
