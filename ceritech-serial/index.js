@@ -60,6 +60,7 @@ if (!config.get('ready')) {
 }
 
 let deviceId = [];
+let deviceName = [];
 let mode = 0;
 let calibrator = config.get('calibration.coefficient') || []; // y = mx + b
 
@@ -68,11 +69,24 @@ const baud = config.get('serial.baudrate') || 9600;
 
 let serialport = null;
 let parser = null;
+// const serialport = new SerialPort({
+//     path: port,
+//     baudRate: baud,
+// });
+// const parser = serialport.pipe(new ReadlineParser('\r\n'));
 
 if (config.get('device.id')) {
     if (config.get('device.id').length > 0) {
         config.get('device.id').map(x => {
             deviceId = [...deviceId, x];
+        });
+    }
+}
+
+if (config.get('device.name')) {
+    if (config.get('device.name').length > 0) {
+        config.get('device.name').map(x => {
+            deviceName = [...deviceName, x];
         });
     }
 }
@@ -92,34 +106,40 @@ const sensorSender = spawnStateless(system, async (message, _context) => {
         log.debug(`${message.sensing} on device ${message.device} value: ${message.value}`);
 
         //
-        socket.emit('sensor', {
-            name: message.sensing,
-            owner_id: message.device,
-            value: message.value,
-        });
+        let idx = deviceName.findIndex(x => x === message.device);
+        if (idx > -1) {
+            //
+            socket.emit('sensor', {
+                name: message.sensing,
+                owner_id: deviceId[idx],
+                value: message.value,
+            });
+        }
     } catch (err) {
         log.error(err);
     }
 }, 'sensorSender', { onCrash: reset });
 
 const phCalibrator = spawnStateless(system, async (message, _context) => {
+    // console.log({ mode });
+    // log.debug(`device ${message.device} value: ${message.value}`);
     try {
         if (mode === 0) {
-            let idx = deviceId.findIndex(x => x === message.device);
+            let idx = deviceName.findIndex(x => x === message.device);
             if (idx > -1) {
                 log.debug(`pH on CH${idx + 1} value: ${message.value}`);
 
-                //
-                console.log(`COEFF M: ${config.get(`calibration.coefficient.${idx + 1}.m`)}`);
-                console.log(`CONST B: ${config.get(`calibration.coefficient.${idx + 1}.b`)}`);
+                // //
+                // console.log(`COEFF M: ${config.get(`calibration.coefficient.${idx}.m`)}`);
+                // console.log(`CONST B: ${config.get(`calibration.coefficient.${idx}.b`)}`);
 
                 //
-                if (config.get(`calibration.coefficient.${idx + 1}.m`) * message.value + config.get(`calibration.coefficient.${idx + 1}.b`) >= 0 && config.get(`calibration.coefficient.${idx + 1}.m`) * message.value + config.get(`calibration.coefficient.${idx + 1}.b`) <= 14) {
+                if (config.get(`calibration.coefficient.${idx}.m`) * message.value + config.get(`calibration.coefficient.${idx}.b`) >= 0 && config.get(`calibration.coefficient.${idx}.m`) * message.value + config.get(`calibration.coefficient.${idx}.b`) <= 14) {
                     //
                     dispatch(sensorSender, {
                         sensing: 'ph',
                         device: deviceId[idx],
-                        value: config.get(`calibration.coefficient.${idx + 1}.m`) * message.value + config.get(`calibration.coefficient.${idx + 1}.b`),
+                        value: config.get(`calibration.coefficient.${idx}.m`) * message.value + config.get(`calibration.coefficient.${idx}.b`),
                     });
                 } else {
                     //
@@ -134,14 +154,15 @@ const phCalibrator = spawnStateless(system, async (message, _context) => {
             let theValue = [];
 
             //
-            deviceId.forEach((_) => {
+            deviceName.forEach((_) => {
                 theValue.push(0);
             });
 
             //
-            let idx = deviceId.findIndex(x => x === message.device);
+            let idx = deviceName.findIndex(x => x === message.device);
             if (idx > -1) {
                 theValue[idx] = message.value;
+                log.debug(`pH on CH${idx + 1} value: ${message.value}`);
             }
 
             //
@@ -209,8 +230,10 @@ socket.on('ph_mode_activation', (option) => {
 
         //
         list.forEach((x) => {
-            x.path === port ? active = true : active = false;
+            x.path === port ? active = true : null;
         });
+
+        // console.log({ active });
 
         //
         if (active) {
@@ -218,124 +241,236 @@ socket.on('ph_mode_activation', (option) => {
                 path: port,
                 baudRate: baud,
             });
-            parser = serialport.pipe(new ReadlineParser());
+            parser = serialport.pipe(new ReadlineParser('\r\n'));
+            parser.on('data', (data) => {
+                log.debug(`data: ${data}`);
+        
+                //
+                if (data) {
+                    if (data.includes(';')) {
+                        switch (argv.device_type) {
+                            case 'cerifer':
+                                const ceriferData = data.split(';') || [];
+                                log.debug(`cerifer data: ${JSON.stringify(ceriferData)}`);
+        
+                                //
+                                if (ceriferData.length >= 5) {
+                                    const device = ceriferData[0];
+                                    const aTemp = Number(ceriferData[1]);
+                                    const adcPh = Number(ceriferData[2]);
+                                    const vBatt = Number(ceriferData[3]);
+                                    const cBatt = ceriferData[4];
+        
+                                    //
+                                    dispatch(phCalibrator, {
+                                        device,
+                                        value: adcPh,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'temperature',
+                                        device,
+                                        value: aTemp,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'voltage_battery',
+                                        device,
+                                        value: vBatt,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'charge_battery',
+                                        device,
+                                        value: cBatt,
+                                    });
+                                }
+        
+                                //
+                                break;
+                            case 'cerigar':
+                                const cerigarData = data.split(';') || [];
+                                log.debug(`cerigar data: ${JSON.stringify(cerigarData)}`);
+        
+                                //
+                                if (cerigarData.length >= 7) {
+                                    const device = cerigarData[0];
+                                    const bTemp = Number(cerigarData[1]);
+                                    const lux = Number(cerigarData[2]);
+                                    const aTemp = Number(cerigarData[3]);
+                                    const aHum = Number(cerigarData[4]);
+                                    const vBatt = Number(cerigarData[5]);
+                                    const cBatt = cerigarData[6];
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'bean_temperature',
+                                        device,
+                                        value: bTemp,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'light_intensity',
+                                        device,
+                                        value: lux,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'temperature',
+                                        device,
+                                        value: aTemp,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'humidity',
+                                        device,
+                                        value: aHum,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'voltage_battery',
+                                        device,
+                                        value: vBatt,
+                                    });
+        
+                                    //
+                                    dispatch(sensorSender, {
+                                        sensing: 'charge_battery',
+                                        device,
+                                        value: cBatt,
+                                    });
+                                }
+        
+                                //
+                                break;
+                        }
+                    }
+                }
+            });
         }
     } catch (error) {
         log.error("ceritech serial error: " + error.message);
     }
 })();
 
-if (parser) {
-    parser.on('data', (data) => {
-        log.debug(`data: ${data}`);
+// if (parser) {
+//     parser.on('data', (data) => {
+//         log.debug(`data: ${data}`);
 
-        //
-        if (data) {
-            if (data.includes(';')) {
-                switch (argv.device_type) {
-                    case 'cerifer':
-                        const ceriferData = data.split(';') || [];
-                        log.debug(`cerifer data: ${JSON.stringify(ceriferData)}`);
+//         //
+//         if (data) {
+//             if (data.includes(';')) {
+//                 switch (argv.device_type) {
+//                     case 'cerifer':
+//                         const ceriferData = data.split(';') || [];
+//                         log.debug(`cerifer data: ${JSON.stringify(ceriferData)}`);
 
-                        //
-                        if (ceriferData.length >= 5) {
-                            const device = ceriferData[0];
-                            const aTemp = Number(ceriferData[1]);
-                            const adcPh = Number(ceriferData[2]);
-                            const vBatt = Number(ceriferData[3]);
-                            const cBatt = ceriferData[4];
+//                         //
+//                         if (ceriferData.length >= 5) {
+//                             const device = ceriferData[0];
+//                             const aTemp = Number(ceriferData[1]);
+//                             const adcPh = Number(ceriferData[2]);
+//                             const vBatt = Number(ceriferData[3]);
+//                             const cBatt = ceriferData[4];
 
-                            //
-                            dispatch(phCalibrator, {
-                                device,
-                                value: adcPh,
-                            });
+//                             //
+//                             dispatch(phCalibrator, {
+//                                 device,
+//                                 value: adcPh,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'temperature',
-                                device,
-                                value: aTemp,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'temperature',
+//                                 device,
+//                                 value: aTemp,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'voltage_battery',
-                                device,
-                                value: vBatt,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'voltage_battery',
+//                                 device,
+//                                 value: vBatt,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'charge_battery',
-                                device,
-                                value: cBatt,
-                            });
-                        }
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'charge_battery',
+//                                 device,
+//                                 value: cBatt,
+//                             });
+//                         }
 
-                        //
-                        break;
-                    case 'cerigar':
-                        const cerigarData = data.split(';') || [];
-                        log.debug(`cerigar data: ${JSON.stringify(cerigarData)}`);
+//                         //
+//                         break;
+//                     case 'cerigar':
+//                         const cerigarData = data.split(';') || [];
+//                         log.debug(`cerigar data: ${JSON.stringify(cerigarData)}`);
 
-                        //
-                        if (cerigarData.length >= 7) {
-                            const device = cerigarData[0];
-                            const bTemp = Number(cerigarData[1]);
-                            const lux = Number(cerigarData[2]);
-                            const aTemp = Number(cerigarData[3]);
-                            const aHum = Number(cerigarData[4]);
-                            const vBatt = Number(cerigarData[5]);
-                            const cBatt = cerigarData[6];
+//                         //
+//                         if (cerigarData.length >= 7) {
+//                             const device = cerigarData[0];
+//                             const bTemp = Number(cerigarData[1]);
+//                             const lux = Number(cerigarData[2]);
+//                             const aTemp = Number(cerigarData[3]);
+//                             const aHum = Number(cerigarData[4]);
+//                             const vBatt = Number(cerigarData[5]);
+//                             const cBatt = cerigarData[6];
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'bean_temperature',
-                                device,
-                                value: bTemp,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'bean_temperature',
+//                                 device,
+//                                 value: bTemp,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'lux',
-                                device,
-                                value: lux,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'lux',
+//                                 device,
+//                                 value: lux,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'temperature',
-                                device,
-                                value: aTemp,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'temperature',
+//                                 device,
+//                                 value: aTemp,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'humidity',
-                                device,
-                                value: aHum,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'humidity',
+//                                 device,
+//                                 value: aHum,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'voltage_battery',
-                                device,
-                                value: vBatt,
-                            });
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'voltage_battery',
+//                                 device,
+//                                 value: vBatt,
+//                             });
 
-                            //
-                            dispatch(sensorSender, {
-                                sensing: 'charge_battery',
-                                device,
-                                value: cBatt,
-                            });
-                        }
+//                             //
+//                             dispatch(sensorSender, {
+//                                 sensing: 'charge_battery',
+//                                 device,
+//                                 value: cBatt,
+//                             });
+//                         }
 
-                        //
-                        break;
-                }
-            }
-        }
-    });
-}
+//                         //
+//                         break;
+//                 }
+//             }
+//         }
+//     });
+// }
