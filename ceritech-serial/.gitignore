@@ -1,0 +1,6 @@
+node_modules
+*.backup*
+testing*
+*.log
+.env
+config.yaml
