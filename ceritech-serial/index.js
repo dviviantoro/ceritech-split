@@ -91,6 +91,15 @@ if (config.get('device.name')) {
     }
 }
 
+// console.log({ deviceId, deviceName });
+
+let theValue = [];
+
+//
+deviceId.forEach((_) => {
+    theValue.push(0);
+});
+
 // delay in ms
 const delay = duration => new Promise((resolve) => setTimeout(() => resolve(), duration));
 const system = start();
@@ -122,7 +131,7 @@ const sensorSender = spawnStateless(system, async (message, _context) => {
 
 const phCalibrator = spawnStateless(system, async (message, _context) => {
     // console.log({ mode });
-    // log.debug(`device ${message.device} value: ${message.value}`);
+    log.debug(`device ${message.device} value: ${message.value}`);
     try {
         if (mode === 0) {
             let idx = deviceName.findIndex(x => x === message.device);
@@ -138,32 +147,28 @@ const phCalibrator = spawnStateless(system, async (message, _context) => {
                     //
                     dispatch(sensorSender, {
                         sensing: 'ph',
-                        device: deviceId[idx],
+                        device: deviceName[idx],
                         value: config.get(`calibration.coefficient.${idx}.m`) * message.value + config.get(`calibration.coefficient.${idx}.b`),
                     });
                 } else {
                     //
                     dispatch(sensorSender, {
                         sensing: 'ph',
-                        device: deviceId[idx],
+                        device: deviceName[idx],
                         value: -1.0,
                     });
                 }
             }
         } else if (mode === 1) {
-            let theValue = [];
-
-            //
-            deviceName.forEach((_) => {
-                theValue.push(0);
-            });
-
             //
             let idx = deviceName.findIndex(x => x === message.device);
             if (idx > -1) {
                 theValue[idx] = message.value;
-                log.debug(`pH on CH${idx + 1} value: ${message.value}`);
             }
+
+            //
+            // log.debug(`pH calibration value: ${theValue}`);
+            // console.log(theValue);
 
             //
             socket.emit('calibration', {
@@ -241,7 +246,7 @@ socket.on('ph_mode_activation', (option) => {
                 path: port,
                 baudRate: baud,
             });
-            parser = serialport.pipe(new ReadlineParser('\r\n'));
+            parser = serialport.pipe(new ReadlineParser());
             parser.on('data', (data) => {
                 log.debug(`data: ${data}`);
         
